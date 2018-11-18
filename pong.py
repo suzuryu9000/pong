@@ -2,22 +2,23 @@
 Trains an agent with (stochastic) Policy Gradients on Pong. Uses OpenAI Gym.
 https://github.com/openai/gym/blob/master/gym/envs/atari/atari_env.py
 """
-import numpy as np
 import pickle
+import numpy as np
 import gym
 
 # hyperparameters
 H = 200                 # Number of hidden layer neurons
 # How many games we play before updating the weights of our network.
 batch_size = 10
+
 # The rate at which we learn from our results to compute the new weights. A higher rate means
+# we react more to results and a lower rate means we don’t react as strongly to each result.
 learning_rate = 1e-4
-# 	we react more to results and a lower rate means we don’t react as strongly to each result.
 
 # The discount factor we use to discount the effect of old actions on the final result.
 gamma = 0.99
 decay_rate = 0.99       # Parameter used in RMSProp
-resume = True           # Resume from previous checkpoint?
+resume = False           # Resume from previous checkpoint?
 render = True           # Display game window
 
 # model initialization
@@ -45,7 +46,7 @@ def sigmoid(x):
     # https://en.wikipedia.org/wiki/Sigmoid_function
     """
     # TODO
-    pass
+    return 1.0 / (1.0 + np.exp(-x))
 
 
 def preprocess(I):
@@ -87,7 +88,12 @@ def policy_forward(x):
     Will be able to detect various game scenarios (e.g. the ball is in the top, and our paddle is in the middle)
     """
     # TODO
-    pass
+    h = np.dot(model['W1'], x)
+    h[ h < 0 ] = 0
+    logp = np.dot(model['W2'], h)
+
+    p = sigmoid(logp)
+    return p, h
 
 
 def policy_backward(eph, epdlogp):
@@ -131,10 +137,21 @@ while True:
         env.render()
 
     # preprocess the observation, set input to network to be difference image
+    curr_x = preprocess(observation)
+    x = curr_x - prev_x if prev_x is not None else np.zeros(0)
+    prev_x = curr_x
 
     # forward the policy network and sample an action from the returned probability
+    aprob, hidden_state = policy_forward(x)
+    action = 2 if np.random.uniform() < aprob else 5
 
     # record various intermediates (needed later for backprop)
+    episode_observations.append(x)
+    episode_hidden_layer_values.append(hidden_state)
+    y = 1 if action == 2 else 0
+
+    dlogps.append(y - aprob)
+
 
     # gradient that encourages the action that was taken to be taken
     # see http://cs231n.github.io/neural-networks-2/#losses if confused
